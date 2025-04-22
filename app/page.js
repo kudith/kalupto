@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 export default function Home() {
   const [mode, setMode] = useState("encode"); // encode or decode
@@ -209,6 +210,22 @@ export default function Home() {
         console.log("Parsed data:", data);
         if (mode === "encode" && !data.encoded_image) {
           throw new Error("No encoded image returned from server");
+        }
+
+        // Add validation for decoded messages
+        if (mode === "decode") {
+          // Check if message contains mostly non-printable characters (binary data)
+          if (data.message) {
+            const nonPrintableCount = (data.message.match(/[\x00-\x1F\x7F-\xFF]/g) || []).length;
+            const ratio = nonPrintableCount / data.message.length;
+            
+            // If more than 30% are non-printable characters, likely binary/corrupted data
+            if (ratio > 0.3) {
+              console.warn("Message appears to be binary or corrupted", { ratio, length: data.message.length });
+              data.message = "";  // Clear the corrupted message
+              data.corruptionDetected = true;  // Flag for UI to show specific error
+            }
+          }
         }
 
         setResult(data);
@@ -408,8 +425,36 @@ export default function Home() {
                       </Button>
                     </div>
                   ) : (
-                    <div className="p-4 bg-muted rounded-lg">
-                      <p className="whitespace-pre-wrap">{result.message}</p>
+                    <div>
+                      {result.message && result.message.trim() ? (
+                        <div className="p-4 bg-muted rounded-lg">
+                          <p className="whitespace-pre-wrap">{result.message}</p>
+                        </div>
+                      ) : result.corruptionDetected ? (
+                        <Alert className="border-red-800 bg-red-50 text-red-900">
+                          <AlertCircle className="h-5 w-5 text-red-800" />
+                          <div className="ml-2">
+                            <div className="text-red-800 font-bold text-lg mb-1">
+                              ERROR: Message Extraction Failed
+                            </div>
+                            <div className="text-red-700">
+                              <p>Corruption detected in the image data. This image may:</p>
+                              <ul className="list-disc ml-5 mt-2 space-y-1">
+                                <li>Not contain any hidden message</li>
+                                <li>Have been modified or compressed after encoding</li>
+                                <li>Be using a different steganography algorithm</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </Alert>
+                      ) : (
+                        <Alert className="bg-yellow-50 border-yellow-200">
+                          <Info className="h-4 w-4" />
+                          <AlertDescription>
+                            No hidden message was found in this image. The image may not have been encoded with any message or the message could not be detected.
+                          </AlertDescription>
+                        </Alert>
+                      )}
                     </div>
                   )}
                 </CardContent>
